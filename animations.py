@@ -130,6 +130,9 @@ class Sprite(Entity):
     def simple_collisionbox(self):
         return self.current_animation().simple_collisionbox()
 
+    def coords(self):
+        return (self.x, self.y)
+
     def collided(self,other_sprite):
         own_boxes = self.collisionboxes()
         other_boxes = other_sprite.collisionboxes()
@@ -159,13 +162,12 @@ class Shape:
             x1,y1 = db1.rx + xy1[0], db1.ry + xy1[1]
             x2,y2 = db1.shape.width + x1, db1.shape.height + y1
 
-            a1,b1 = db2.rx + xy1[0], db2.ry + xy1[1]
-            a2,b2 = db2.shape.width + x1, db2.shape.height + y1
+            a1,b1 = db2.rx + xy2[0], db2.ry + xy2[1]
+            a2,b2 = db2.shape.width + a1, db2.shape.height + b1
 
-            if (x1 < a2 and
-                x2 > a1 and
-                y1 < b2 and
-                y2 > b1):
+            if ((x1 > a2 or x2 < a1) or (y1 > b2 or y2 < b1)):
+                return False
+            else:
                 return True
 
         ## circle x circle
@@ -196,8 +198,8 @@ class DetectionBox:
         for box in boxes[:-1]: # we already checked the last one on the last 2 lines
             x = min(x,box.left_most())
             y = min(y,box.upper())
-            x2 = min(x2,box.right_most())
-            y2 = min(y2,box.lowwer())
+            x2 = max(x2,box.right_most())
+            y2 = max(y2,box.lowwer())
         b = Box(x2-x,y2-y)
         simpleb = DetectionBox(b,x,y)
         
