@@ -8,10 +8,12 @@ pygame.init()
 height = 600
 width = 600
 
-p1 = create_player(0,0)
-p2 = create_player(100,100,[0,1])
+p1 = create_player(100,100)
+p2 = create_player(100,400)
 PlayerControls(p1,{'move_left': K_a,'move_right': K_d,'move_up': K_w,'move_down': K_s,'speed_up': K_LSHIFT})
 PlayerControls(p2,{'move_left': K_LEFT,'move_right': K_RIGHT,'move_up': K_UP,'move_down': K_DOWN,'speed_up': K_RSHIFT})
+b1 = create_ball(100,200)
+b2 = create_ball(200,200,speed=[-1,1])
 
 window = pygame.display.set_mode((width,height))#, pygame.NOFRAME)
 clock = pygame.time.Clock()
@@ -27,5 +29,11 @@ while(1):
     PlayerControls.main(pygame.key.get_pressed())
     p1.draw(window)
     p2.draw(window)
+    b1.draw(window)
+    b2.draw(window)
+    b1.update()
+    b2.update()
+
+    print(b1.collided(b2))
 
     pygame.display.update()
