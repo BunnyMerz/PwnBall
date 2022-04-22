@@ -1,39 +1,52 @@
 import pygame
 from pygame.constants import *
 from player import *
+from network import *
 from controls import *
 import sys
+import traceback
 
 pygame.init()
-height = 600
-width = 600
 
-p1 = create_player(100,100)
-p2 = create_player(100,400)
-PlayerControls(p1,{'move_left': K_a,'move_right': K_d,'move_up': K_w,'move_down': K_s,'speed_up': K_LSHIFT})
-PlayerControls(p2,{'move_left': K_LEFT,'move_right': K_RIGHT,'move_up': K_UP,'move_down': K_DOWN,'speed_up': K_RSHIFT})
-b1 = create_ball(100,200)
-b2 = create_ball(200,200,speed=[-1,1])
+def main(own_ip,own_port, their_ip, their_port, player_n):
+    try:
+        height = 600
+        width = 600
 
-window = pygame.display.set_mode((width,height))#, pygame.NOFRAME)
-clock = pygame.time.Clock()
+        p1 = create_player(100,100)
+        p2 = create_player(100,400)
+        players = [p1,p2]
+        PlayerControls(players[player_n], {'move_left': K_a,'move_right': K_d,'move_up': K_w,'move_down': K_s,'speed_up': K_LSHIFT})
+        b1 = create_ball(100,340, Vector2(0,-5))
+        b2 = create_ball(200,200, Vector2(-1,1))
+        balls = [b1, b2]
 
-while(1):
-    window.fill((0,0,0))
-    delta_time = clock.tick(60)/1000
-    
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            sys.exit()
+        window = pygame.display.set_mode((width,height))#, pygame.NOFRAME)
+        clock = pygame.time.Clock()
+        
+        Network.server = Server(own_ip,own_port)
+        Network.server.start()
+        Network.add_client(Client(their_ip,their_port))
 
-    PlayerControls.main(pygame.key.get_pressed())
-    p1.draw(window)
-    p2.draw(window)
-    b1.draw(window)
-    b2.draw(window)
-    b1.update()
-    b2.update()
+        while(1):
+            window.fill((30,30,30))
+            delta_time = clock.tick(60)/1000
+            
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    sys.exit()
 
-    print(b1.collided(b2))
+            PlayerControls.main(pygame.key.get_pressed())
+            for e in Entity.entities:
+                e.draw(window)
 
-    pygame.display.update()
+            b1.update()
+            b2.update()
+
+            b1.has_collided(p1)
+            b1.has_collided(p2)
+
+            pygame.display.update()
+    except:
+        traceback.print_exc()
+        input()

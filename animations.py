@@ -1,18 +1,30 @@
+from abc import abstractclassmethod
 from matplotlib import animation
 from pygame import Vector2
+import itertools
+
+import pygame
 
 class Entity():
     """Basic class. Used for basically anything that resides phisically in the game"""
-    id = 1
+    id_iter = itertools.count()
+    next(id_iter)
     entities = []
     def __init__(self,x,y):
         ###
-        self.entity_id = Entity.id ## For debugging and sending over the network
-        Entity.id += 1
+        self.id = next(Entity.id_iter) ## For debugging and sending over the network
         Entity.entities.append(self)
+        self.owner = ''
         ###
         self.x = x
         self.y = y
+
+    def find(id):
+        id = int(id)
+        for e in Entity.entities:
+            if e.id == id:
+                print('r')
+                return e
 
 class Frame():
     """Represents a single frame with specialboxes, or a still image"""
@@ -137,17 +149,22 @@ class Sprite(Entity):
     def coords(self):
         return Vector2(self.x, self.y)
 
-    def collided(self,other_sprite):
+    def collided(self, collided_with_box, father_obj): ## Will be called once it collides with a certain hitbox
+        pass
+
+    def has_collided(self,other_sprite):
         own_boxes = self.collisionboxes()
         other_boxes = other_sprite.collisionboxes()
 
         ## If the generic boxes dont collide, none of the specific ones will
-        if not Shape.collided(self.simple_collisionbox(), self.coords(),other_sprite.simple_collisionbox(), other_sprite.coords()):
+        if not Shape.has_collided(self.simple_collisionbox(), self.coords(),other_sprite.simple_collisionbox(), other_sprite.coords()):
             return False
 
-        for own_bow in own_boxes: ## n² sadly lol
+        for own_box in own_boxes: ## n² sadly lol
             for their_box in other_boxes:
-                if Shape.collided(own_bow, self.coords(), their_box, other_sprite.coords()):
+                if Shape.has_collided(own_box, self.coords(), their_box, other_sprite.coords()):
+                    self.collided(their_box, other_sprite)
+                    other_sprite.collided(own_box, self)
                     return True
 
         return False
@@ -161,7 +178,7 @@ class Sprite(Entity):
 ####### Boxes
 
 class Shape: ## Class for collision detection btw diff shapes. Tought about going an abstract path but was slightly hard, so opted for treating each case differently.
-    def collided(db1,xy1,db2,xy2):
+    def has_collided(db1,xy1: Vector2,db2,xy2: Vector2):
         ## box x circle
         if (isinstance(db1.shape, Box) and isinstance(db2.shape, Circle)) or (isinstance(db2.shape, Box) and isinstance(db1.shape, Circle)): ## No idea for a better if
             return True
@@ -182,7 +199,8 @@ class Shape: ## Class for collision detection btw diff shapes. Tought about goin
         if isinstance(db1.shape, Circle) and isinstance(db2.shape, Circle):
             xy1 += Vector2(db1.shape.r,db1.shape.r) ## Getting the center of the circle
             xy2 += Vector2(db2.shape.r,db2.shape.r) ## Scuffed lol
-            d = ((xy1[0] - xy2[0])**2 + (xy1[1] - xy2[1])**2)**(1/2)
+            # d = ((xy1[0] - xy2[0])**2 + (xy1[1] - xy2[1])**2)**(1/2)
+            d = Vector2.distance_to(xy1,xy2)
             return d <= db1.shape.r + db2.shape.r
 
         return False
@@ -190,12 +208,17 @@ class Shape: ## Class for collision detection btw diff shapes. Tought about goin
 class DetectionBox:
     def __init__(self,shape,relative_x = 0, relative_y = 0):
         self.shape = shape
-        self.rx = relative_x # relative x (relative to image it is attached to, in this case, Frame())
+        ## Honestly, using relative coordinates has been a bit of a pain. I want to get the projection (normal vector of the surface of this detection box based on a point) of this box but bc of relative coordinates, I end up having to call the function higher up.
+        self.rx = relative_x # relative x (relative to image it is attached to, in this project's case, Frame())
         self.ry = relative_y # relative y
 
-    def collided(self,other_detectionbox): ## Kinda useless as it needs to be attached to something (thus rx)
-        return Shape.collided(self.shape,(0,0),other_detectionbox.shape,(0,0))
+    def coords(self):
+        return Vector2(self.rx, self.ry)
 
+    # def has_collided(self,other_detectionbox): ## Kinda useless as it needs to be attached to something (thus relativex)
+    #     return Shape.has_collided(self.shape,(0,0),other_detectionbox.shape,(0,0))
+
+    ## These could be virual attributes, but I learned about them too late
     def upper(self): ## All four functions are for creating a simplier box regardless of shape used.
         return self.shape.upper() + self.ry
     def lower(self):
@@ -224,6 +247,9 @@ class Box:
         self.height = height
         ## No x nor y since they are just meant for shape-making
 
+    def surface_vetor(self, point): ## Given a point, return a vector that represents the surface collided with
+        pass
+
     def upper(self):
         return 0
     def lower(self):
@@ -237,6 +263,9 @@ class Circle:
     def __init__(self,r):
         self.r = r
         ## Width doesnt make sense on a circle, so the idea of upper/lower/left/right came into mind.
+
+    def surface_vetor(self, point): ## Given a point, return a vector that represents the surface collided with
+        pass
 
     def upper(self):
         return - self.r
