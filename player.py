@@ -22,6 +22,8 @@ class Player(Sprite):
         self.pos(self.x + x,self.y + y) # x += x but with collision detection.
     
     def pos(self,x,y):
+        if x == self.x and y == self.y:
+            return
         # TODO add collision check post movement and rollback (preferably using binary search) using tracing accordingly
         self.x = x
         self.y = y
@@ -42,6 +44,7 @@ class Player(Sprite):
         self = Player.find(id)
         self.x = x
         self.y = y
+        print('Player',id,'moved to',x,y)
 
     def update_to_network(self):
         network.Network.send(self.encode())
@@ -83,6 +86,7 @@ class Ball(Sprite):
         self.x = x
         self.y = y
         self.update_speed(Vector2(sx,sy),from_network=True)
+        print('Updating ball pos to',x,y)
 
     def update_to_network(self):
         network.Network.send(self.encode())
