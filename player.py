@@ -1,6 +1,3 @@
-from re import X
-from turtle import Vec2D
-from unittest import case
 from animations import *
 import pygame
 import network

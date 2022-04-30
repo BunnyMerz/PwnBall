@@ -152,9 +152,10 @@ class Network:
             print('Invalid Packet recived')
             return
 
-        exec(class_type+'.'+mode+'("'+args+'")') ## TODO this opens up for code injection. exec() failed when trying something like 'fn = functioncall' as fn stayed as None.
-        ## Tried this already
-        # exec('fn = '+class_type+'.'+mode)
-        # fn(args)
-        ## Didnt work as fn was still not defined
-        return # just so the comments are hidden inside the function (vscode thing)
+        ## Using dictionary and variable fn to avoid code injection
+        fn = lambda : None
+        _locals = locals()
+        exec('fn = '+class_type+'.'+mode, globals(), _locals)
+        _locals['fn'](args)
+
+        return
