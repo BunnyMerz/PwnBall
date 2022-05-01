@@ -1,7 +1,8 @@
 from time import sleep
 import pygame
 from pygame.constants import *
-from player import *
+from objects.player import *
+from objects.ball import *
 from network import *
 from controls import *
 import sys
@@ -39,22 +40,23 @@ def main():
     clock = pygame.time.Clock()
     
 
+    while(Network.clients == []):
+        addr = input("Input their ip [0.0.0.0:6969] or press enter if they already connected: ")
+        try:
+            ip, port = addr.split(':')
+            port = int(port)
+        except:
+            print("Malformed address or skipped direct connection.")
+        try:
+            Network.connect_to(ip,port)
+            your_controls.player = players[Network.connection_id - 1]
+        except:
+            print('Something happend when trying to connect')
+            print("##############")
+            traceback.print_exc()
+            print("##############")
+
     while(1):
-        while(Network.clients == []):
-            addr = input("Input their ip [0.0.0.0:6969] or press enter if they already connected: ")
-            try:
-                ip, port = addr.split(':')
-                port = int(port)
-            except:
-                print("Malformed address or skipped direct connection.")
-            try:
-                Network.connect_to(ip,port)
-                your_controls.player = players[Network.connection_id - 1]
-            except:
-                print('Something happend when trying to connect')
-                print("##############")
-                traceback.print_exc()
-                print("##############")
 
         window.fill((30,30,30))
         delta_time = clock.tick(60)/1000

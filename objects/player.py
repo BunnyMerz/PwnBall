@@ -26,13 +26,13 @@ class Player(Sprite):
         self.y = y
         self.update_to_network()
 
-    def encode(self):
+    def encode(self): ## Encodes the Player obj to send trough the Network class
         data = ';'.join([str(x) for x in [self.x, self.y, self.id]])
-        return ('PKT_U_Player/' + data).encode()
+        return 'PKT_U_Player/' + data ## Sending it as a str is more appropriate than bytes. Let the socket change it to bytes.
 
-    def decode(data):
-        data = [float(x) for x in data.split(';')]
-        return data # x,y,id
+    def decode(string): ## Recives the encoded obj (encoded by player.encode(self)) as a string
+        string = [float(x) for x in string.split(';')]
+        return string # x,y,id
 
     def update_network(args): ## Recived message from Server. Args is a string
         # find by id
@@ -65,32 +65,38 @@ def create_player(x,y,orientation=[1,0]): ## Just for debugging as of now. Possi
 class Ball(Sprite):
     def __init__(self, x, y, animations, animation_tree):
         super().__init__(x, y, animations, animation_tree)
-        # self.owner = network.Network.connection_id
+        self.owner_id = 1 ## Network.connection_id
 
+    ## Network related
     def encode(self):
-        data = ';'.join([str(x) for x in [self.x, self.y, self.speed[0], self.speed[1], self.id]])
-        return ('PKT_U_Ball/'+data).encode()
+        data = ';'.join([str(x) for x in [self.x, self.y, self.speed[0], self.speed[1], self.id, self.owner_id]])
+        return 'PKT_U_Ball/'+data
 
-    def decode(data):
-        data = [float(x) for x in data.split(';')]
-        return data # x,y,id
+    def decode(string):
+        string = [float(x) for x in string.split(';')]
+        return string # x,y,id
 
-    def update_network(args): ## Recived message from Server. Args is a string
+    def update_network(args): ## Recived message from Server. Args is a string encoded by ball.encode()
         # find by id
         args = Ball.decode(args)
-        x,y,sx,sy,id = args
+        x,y,sx,sy,id,ow_id = args
         self = Ball.find(id)
         self.x = x
         self.y = y
+        self.owner_id = ow_id
         self.update_speed(Vector2(sx,sy),from_network=True)
-        print('Updating ball pos to',x,y)
+        print('Updating ball pos to',x,y) ## debug
 
     def update_to_network(self):
         network.Network.send(self.encode())
 
+    ######################
+
     def update_speed(self,new_speed, from_network=False):
         self.speed = new_speed
-        if not from_network:
+        print('ball:',self.owner_id, 'connection:', network.Network.connection_id)
+        if not from_network and self.owner_id == network.Network.connection_id:
+            self.decide_owner()
             self.update_to_network()
 
     def collided(self, collided_with_box, father_obj): ## Find the normal vector from collided_with and pass to bounce()
@@ -120,6 +126,12 @@ class Ball(Sprite):
 
     def bounce(self,normal_vector):
         self.update_speed(self.speed.reflect(normal_vector))
+
+    def decide_owner(self): ## This will decide who should take care of this obj's updating
+        if self.speed[1] < 0:
+            self.owner_id = 1
+        else:
+            self.owner_id = 2
 
 def create_ball(x,y,speed=Vector2(0,1)):
     r =  7

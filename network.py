@@ -1,8 +1,9 @@
 import socket
 import threading
+import time
 
 from cv2 import add
-import player
+import objects.player as player
 
 class Server:
     def __init__(self, ip, port):
@@ -36,6 +37,7 @@ class Server:
         print('waiting for client',id,'data')
         while(1):
             data = conn.recv(2048).decode()
+            # time.sleep(0.1) ## debug. Simulate lag. Must be put here as this func will be threaded
             if data:
                 data = data.split('\0')[:-1]
                 for d in data:
@@ -57,8 +59,8 @@ class Client:
         #
         self.connection_id = self.connect(first_connection)
 
-    def send(self,data):
-        self.socket.send(data + b'\0')
+    def send(self,string):
+        self.socket.send((string + '\0').encode())
 
     def connect(self, first_connection=1):
         ##
@@ -137,7 +139,7 @@ class Network:
     def add_client(client):
         Network.clients.append(client)
 
-    def send(obj): ## Send obj encoded in the format listed in this class with comments
+    def send(obj): ## Obj is a string
         for c in Network.clients:
             c.send(obj)
 
