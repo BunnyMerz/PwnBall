@@ -8,6 +8,8 @@ from controls import *
 import sys
 import traceback
 
+from objects.wall import Wall
+
 pygame.init()
 
 def main():
@@ -35,6 +37,9 @@ def main():
     b1 = create_ball(100,340, Vector2(0,-5))
     b2 = create_ball(200,200, Vector2(-1,1))
     balls = [b1, b2]
+
+    Wall(0,0,10,600)
+    Wall(590,0,10,600)
 
     window = pygame.display.set_mode((width,height))#, pygame.NOFRAME)
     clock = pygame.time.Clock()

@@ -7,6 +7,8 @@ from controls import *
 import sys
 import traceback
 
+from objects.wall import Wall
+
 pygame.init()
 
 def main():
@@ -21,7 +23,12 @@ def main():
     p2 = create_player(100,590)
     players = [p1,p2]
     your_controls = PlayerControls(players[Network.connection_id - 1], {'move_left': K_a,'move_right': K_d,'move_up': K_w,'move_down': K_s,'speed_up': K_LSHIFT})
-    b1 = create_ball(100,340, Vector2(0,-5))
+    b1 = create_ball(100,340, Vector2(2,-5))
+
+    Wall(0,0,10,600)
+    Wall(590,0,10,600)
+    Wall(0,-1,600,1)
+    Wall(0,601,600,1)
 
     window = pygame.display.set_mode((width,height))#, pygame.NOFRAME)
     clock = pygame.time.Clock()
