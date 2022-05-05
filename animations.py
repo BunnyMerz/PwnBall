@@ -1,8 +1,5 @@
-from abc import abstractclassmethod
-from matplotlib import animation
 from pygame import Vector2
 import itertools
-
 import pygame
 
 class Entity():
@@ -23,7 +20,6 @@ class Entity():
         id = int(id)
         for e in Entity.entities:
             if e.id == id:
-                print('r')
                 return e
 
 class Frame():

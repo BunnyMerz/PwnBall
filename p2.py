@@ -2,6 +2,7 @@ from time import sleep
 import pygame
 from pygame.constants import *
 from objects.player import *
+from objects.ball import *
 from network import *
 from controls import *
 import sys
@@ -49,6 +50,11 @@ def main():
         PlayerControls.main(pygame.key.get_pressed())
         for e in Entity.entities:
             e.draw(window)
+
+        if b1.owner_id == network.Network.connection_id:
+            b1.paint((10,200,30))
+        else:
+            b1.paint((100,20,240))
 
         b1.update()
 

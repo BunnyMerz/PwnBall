@@ -5,6 +5,17 @@ import time
 from cv2 import add
 import objects.player as player
 
+def simulate_lag(fn, ms, args=()):
+    if ms == 0:
+        fn(args)
+        return
+    t = threading.Thread(daemon=True, target=simulate_lag_fn, args=(fn,args,ms))
+    t.start()
+
+def simulate_lag_fn(fn, args, ms):
+    time.sleep(ms/1000)
+    fn(args)
+
 class Server:
     def __init__(self, ip, port):
         self.addr = (ip,port)
