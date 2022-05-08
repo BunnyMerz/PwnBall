@@ -3,6 +3,18 @@ from animations import *
 import pygame
 import network
 
+class Remove(): ## Using a class instead of a const incase I want to change how it behaves later. Keeping the pattern
+    def __init__(self, id):
+        self.id = id
+
+    def __eq__(self, __o) -> bool:
+        if isinstance(__o, Remove):
+            return True
+        return False
+
+    def rollback(self):
+        Ball.find(self.id).hide = 0
+
 class Bounce(): ## Any change in pos and or speed
     def __init__(self,x,y,vx,vy):
         self.x = x
@@ -19,12 +31,16 @@ class Bounce(): ## Any change in pos and or speed
     def info(self) -> List:
         return [self.x,self.y,self.vx,self.vy]
 
+    def rollback(self):
+        return ## nothing to rollback
+
 class Ball(Sprite):
     balls = [] ## Entity already has entity[], but it is a nice shortcut for classes that use find() a lot
     def __init__(self, x, y, animations, animation_tree):
         super().__init__(x, y, animations, animation_tree)
         self.owner_id = 1 ## Network.connection_id
-        self.bounces = [] ## Store bounces made client side, in case it gets desynced with the owner
+        self.history = [] ## Store bounces and scores made client side, in case it gets desynced with the owner
+        self.hide = 0 ## For client-side pseudo-removal
         Ball.balls.append(self)
 
     def paint(self,color): ## Debugg temp function
@@ -33,35 +49,56 @@ class Ball(Sprite):
     ## Network related
     def encode(self):
         data = ';'.join([str(x) for x in [self.x, self.y, self.speed[0], self.speed[1], self.id, self.owner_id]])
-        return 'PKT_U_Ball/'+data
+        return data
 
     def decode(string):
         string = [float(x) for x in string.split(';')]
         return string # x,y,id
 
-    def update_network(args): ## Recived message from Server. Args is a string encoded by ball.encode()
+    def despawn(self): ## Whenever the ball goes offscreen
+        ## Dont remove it, if you aren't the owner
+        if self.owner_id == network.Network.connection_id:
+            Ball.remove(self)
+            msg = 'PKT_R_Ball'
+            args = f'{self.id}'
+            Ball.send_to_network(msg+'/'+args)
+        else:
+            self.history.append(Remove(self.id))
+            self.hide = 1
+
+    def remove(ball):
+        Ball.balls.remove(ball)
+        super().remove(ball)
+
+    def remove_network(args): ## PKT_R_Ball/id
+        id = NetworkBall.PKT_R_Ball(args)
+        b = Ball.find(id)
+
+        if b.check_prediction(Remove(b.id)):
+            Ball.remove(b) ## if he is right, actually remove the obj form list
+        ## check_prediction() will take care if it is false
+
+    def update_network(args): ## PKT_U_Ball/self.encode()
         # find by id
         args = Ball.decode(args)
-        x,y,sx,sy,id,ow_id = args
-        self = Ball.find(id)
+        x,y,vx,vy,id,ow_id = args
 
+        self = Ball.find(id)
         self.owner_id = ow_id ## Update the owner_id regardless of prediction.
         ## Check if it needs reconciliation
-        if self.check_prediction(self,x,y,sx,sy):
+        
+        if self.check_prediction(Bounce(x,y,vx,vy)):
             return # Dont update object if it is right (even if in the future)
+        ## check_prediction() will rollback actions if needed
+
 
         self.x = x
         self.y = y
-        self.update_speed(Vector2(sx,sy),from_network=True)
+        self.update_speed(Vector2(vx,vy),from_network=True)
         print('Updating ball pos to',x,y) ## debug
 
-    def update_to_network(self):
-        network.simulate_lag(
-            network.Network.send,
-            100,
-            (self.encode())
-        )
-        # network.Network.send(self.encode())
+    def send_to_network(message):
+        network.Network.send(message)
 
     ######################
 
@@ -70,7 +107,8 @@ class Ball(Sprite):
         print('ball:',self.owner_id, 'connection:', network.Network.connection_id)
         if not from_network and self.owner_id == network.Network.connection_id:
             self.decide_owner()
-            self.update_to_network()
+            msg = f'PKT_U_Ball/{self.encode()}'
+            Ball.send_to_network(msg)
 
     def collided(self, collided_with_box, father_obj): ## Find the normal vector from collided_with and pass to bounce()
 
@@ -109,19 +147,23 @@ class Ball(Sprite):
         else:
             self.owner_id = 2
 
-    def check_prediction(self,x,y,sx,sy) -> bool: ## Check if our prediction-side is faithful to the truth
+    def check_prediction(self,recieved_action) -> bool: ## Check if our prediction-side is faithful to the truth
         i = 1 # Not an actual index
-        recent = Bounce(x,y,sx,sy)
-        for bounce in self.bounces:
-            if bounce == recent:
-                self.bounces = self.bounces[i:] ## remove the bounce from the history, and any other behind it (in case there were packets lost)
+        for act in self.history:
+            if act == recieved_action:
+                self.history = self.history[i:] ## remove the bounce from the history, and any other behind it (in case there were packets lost)
                 return True
             i += 1
 
+        self.rollback()
         self.bounces = [] ## Predction is completly wrong, ignore the future
         return False
 
-    def find(id):
+    def rollback(self,actions):
+        for act in actions:
+            act.rollback()
+
+    def find(id): ## Overwrites entities' find, for efficiency
         for b in Ball.balls:
             if b.id == id:
                 return b
@@ -143,4 +185,15 @@ def create_ball(x,y,speed=Vector2(0,1)):
     ball.speed = speed
 
     return ball
+
+class NetworkBall():
+
+    def PKT_U_Ball(args):
+        return
+
+    def PKT_R_Ball(args):
+        return int(args)
+    
+    def PKT_S_Ball(args):
+        return
 
