@@ -2,8 +2,8 @@ import socket
 import threading
 import time
 
-from cv2 import add
-import objects.player as player
+from objects.player import Player # "Not used", but used with eval
+from objects.ball import Ball # "Not used", but used with eval
 
 def simulate_lag(fn, ms, args=()):
     if ms == 0:
@@ -103,7 +103,7 @@ class Network:
     # ...
 
     classes = {}
-    classes = {'Ball':'player.Ball', 'Player':'player.Player', 'Network':"Network"}
+    classes = {'Ball':'Ball', 'Player':'Player', 'Network':"Network"}
     modes = {'S':'spawn_network','U':'update_network','R':'remove_network',"C":"cascade_connect"}
 
     def does_connection_exists(ip,port):

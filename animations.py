@@ -11,7 +11,6 @@ class Entity():
         ###
         self.id = next(Entity.id_iter) ## For debugging and sending over the network
         Entity.entities.append(self)
-        self.owner = ''
         ###
         self.x = x
         self.y = y
@@ -21,6 +20,9 @@ class Entity():
         for e in Entity.entities:
             if e.id == id:
                 return e
+
+    def remove(entity):
+        Entity.entities.remove(entity)
 
 class Frame():
     """Represents a single frame with specialboxes, or a still image"""
