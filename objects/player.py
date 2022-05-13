@@ -1,4 +1,4 @@
-from animations import *
+from animation.animations import *
 import pygame
 import network
 

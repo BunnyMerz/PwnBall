@@ -1,5 +1,5 @@
 from typing import List
-from animations import *
+from animation.animations import *
 import pygame
 import network
 

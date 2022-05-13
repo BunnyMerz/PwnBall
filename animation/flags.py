@@ -40,15 +40,3 @@ class Flags():
         for flag in self:
             if flag.name == key:
                 return flag
-
-fs = Flags(
-    [Flag(
-        'Poise',
-        30,
-        [Range(4,7),
-        Range(9,11)]
-        )
-    ]
-    )
-
-print(fs["Poise"][2])
