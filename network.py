@@ -2,9 +2,6 @@ import socket
 import threading
 import time
 
-from objects.player import Player # "Not used", but used with eval
-from objects.ball import Ball # "Not used", but used with eval
-
 def simulate_lag(fn, ms, args=()):
     if ms == 0:
         fn(args)
@@ -155,6 +152,8 @@ class Network:
             c.send(obj)
 
     def on_message(message):
+        from objects.player import Player # "Not used", but used with eval
+        from objects.ball import Ball # "Not used", but used with eval
         pkt,args = message.split('/')
 
         try:
