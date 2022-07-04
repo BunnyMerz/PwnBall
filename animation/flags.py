@@ -40,3 +40,4 @@ class Flags():
         for flag in self:
             if flag.name == key:
                 return flag
+        return FakeFlag()

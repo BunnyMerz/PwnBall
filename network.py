@@ -2,63 +2,63 @@ import socket
 import threading
 import time
 
-def simulate_lag(fn, ms, args=()):
-    if ms == 0:
-        fn(args)
-        return
-    t = threading.Thread(daemon=True, target=simulate_lag_fn, args=(fn,args,ms))
-    t.start()
-
-def simulate_lag_fn(fn, args, ms):
-    time.sleep(ms/1000)
-    fn(args)
 
 class Server:
     def __init__(self, ip, port):
-        self.addr = (ip,port)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         #
-        self.socket.bind(self.addr)
+        self.socket.bind((ip,port))
+        self.addr = self.socket.getsockname()
         self.socket.listen(4)
         #
         self.clients = [] ## List of sockets that this server is listening to.  Not to be confused with Network.clients
+        self.clients_ips = []
+        self.threaded_connection = False
 
     def start(self):
         t = threading.Thread(daemon=True, target=self.thread_connection)
+        self.threaded_connection = True
         t.start()
 
     def thread_client(self, conn, addr):
-        ## Gives them an Id and the ip of everyone else. These ips should be used with cascade_connect
-        id = str(len(Network.clients) + 2)
-        ips = [c.addr[0]+':'+str(c.addr[1]) for c in Network.clients]
-        ips = ';'.join(ips)
-        print("asnwering client request with",[id],[ips])
-        conn.send((id+'-'+ips).encode())
-        ##
-        ## Waits for their server ip
-        data = conn.recv(2048).decode()
-        ip,port = data.split(':')
-        port = int(port)
-        Network.connect_to(ip,port,first_connection=0) ## This is a connection back, which implies this guy is already in a room, thus first_connection=0
-        ##
-        
-        print('waiting for client',id,'data')
+        print('### Waiting for client',id,'data')
         while(1):
             data = conn.recv(2048).decode()
-            # time.sleep(0.1) ## debug. Simulate lag. Must be put here as this func will be threaded
             if data:
                 data = data.split('\0')[:-1]
                 for d in data:
                     Network.on_message(d)
 
     def thread_connection(self):
-        while(1):
-            print('waiting on other clients requests')
+        print("\n### Server.thread_connection()")
+        print('### Waiting on other clients requests')
+        while(self.threaded_connection):
             conn, addr = self.socket.accept() ## Waiting for others to connect.
             self.clients.append(conn) ## Saves socket addr
-            print('recived client request to connect',addr)
+            self.clients_ips.append(addr)
+            print('### Recived client request to connect',addr)
+
+
+            ## Gives them an Id and the ip of everyone else. These ips should be used with cascade_connect
+            id = str(len(Network.other_servers_ips) + 2)
+            ips = [c[0]+':'+str(c[1]) for c in Network.other_servers_ips]
+            ips = ';'.join(ips)
+            print("### Asnwering client request with",[id],[ips],'\n')
+            conn.send((id+'-'+ips).encode())
+            ##
+            ## Waits for their server ip
+            data = conn.recv(2048).decode()
+            print("### Received their server ip:port",data)
+            ip,port = data.split(':')
+            port = int(port)
+            Network.connect_to(ip,port,first_connection=0) ## This is a connection back, which implies this guy is already in a room, thus first_connection=0
+            ##
+
             t = threading.Thread(daemon=True, target=self.thread_client, args=(conn, addr))
             t.start()
+
+    def stop_waiting_connection(self):
+        self.threaded_connection = False
 
 class Client:
     def __init__(self, ip, port,first_connection=1):
@@ -67,28 +67,37 @@ class Client:
         #
         self.connection_id = self.connect(first_connection)
 
+    def __repr__(self) -> str:
+        return str(self.addr)
+
     def send(self,string):
         self.socket.send((string + '\0').encode())
 
     def connect(self, first_connection=1):
         ##
         self.socket.connect(self.addr)
+        self.addr = self.socket.getsockname()
+
         data = self.socket.recv(2048).decode() ## str(Int-Ip;Ip;Ip;...)
         ids,cascade_ips = data.split('-')
-        print('id and cascade recived',cascade_ips)
+        print('## Id and cascade recived',cascade_ips)
         ##
-        print('sending back own server ip')
+        print('## Sending back own server ip',Network.server.addr)
         self.socket.send(Network.addr_string().encode())
         ##
         if first_connection:
-            print("cascade connection",cascade_ips)
+            print("## Cascade connection [",cascade_ips,']')
             Network.cascade_connect(cascade_ips)
+        else:
+            print("## Skipping cascade connection")
         return int(ids)
 
 class Network:
     connection_id = 0 # 0 means no server setted up. 1 Means pseudo-host (first of the room). Any other including 1 represents their player number
     server = None
     clients = [] ## List of sockets connected to other servers. Not to be confused with Server.clients
+    other_servers_ips = []
+    game_started = 0
 
     ## Obj recived/sent format
     ## Packet-Type(str) + '/' + Args (Str.join(;))
@@ -99,13 +108,12 @@ class Network:
     # PKT_U_Player # Update player
     # ...
 
-    classes = {}
-    classes = {'Ball':'Ball', 'Player':'Player', 'Network':"Network"}
-    modes = {'S':'spawn_network','U':'update_network','R':'remove_network',"C":"cascade_connect"}
+    classes = {'Ball':'Ball', 'Player':'Player', 'Network':"Network", 'Goal':"Goal"}
+    modes = {'S':'spawn_network','U':'update_network','R':'remove_network',"C":"cascade_connect",'I':'initialize_game'}
 
     def does_connection_exists(ip,port):
-        for c in Network.clients:
-            if c.addr == (ip,port):
+        for c in Network.other_servers_ips:
+            if c == (ip,port):
                 return True
         return False
 
@@ -114,25 +122,38 @@ class Network:
         return addr[0] + ':' + str(addr[1])
 
     def start(ip,port):
-        print("###")
-        print('Initating own server')
+        print("\n### Network.start()")
+        print('### Initating own server')
         Network.server = Server(ip,port)
         Network.server.start()
         Network.connection_id = 1
-        print('Server initated')
+        print('### Server initated')
         print("###")
 
+    def start_game():
+        Network.server.stop_waiting_connection()
+        Network.send("PKT_I_Network/")
+
+    def initialize_game(args):
+        Network.game_started = 1
+
     def connect_to(ip,port,first_connection=1):
-        print('My id',Network.connection_id)
         if Network.does_connection_exists(ip,port):
             return
+        
+        print("\n### Network.connect_to()")
+        ip = socket.gethostbyname(ip)
+        Network.other_servers_ips.append((ip,port))
         ## creates a Client, connects and saves
-        print("Connecting to server")
+        print("### Trying to connect to server",ip,port)
         c = Client(ip,port,first_connection)
         Network.add_client(c)
         if first_connection:
             Network.connection_id = c.connection_id
-        print("Connected")
+            print('### My id',Network.connection_id)
+        print("### Connected")
+        print("### End of Network.connect_to()")
+        
 
     def cascade_connect(args): ## Connection due to spread_client(). Args = "ip:port;ip:port;..."
         if args == '':
@@ -142,7 +163,7 @@ class Network:
             addr = addr.split(':')
             ip = addr[0]
             port = int(addr[1])
-            Network.add_client(Client(ip,port,1))
+            Network.add_client(Client(ip,port,0))
 
     def add_client(client):
         Network.clients.append(client)
@@ -154,6 +175,7 @@ class Network:
     def on_message(message):
         from objects.player import Player # "Not used", but used with eval
         from objects.ball import Ball # "Not used", but used with eval
+        from objects.goal import Goal # "Not used", but used with eval
         pkt,args = message.split('/')
 
         try:

@@ -1,11 +1,15 @@
 from typing import List
+
+import numpy as np
 from animation.animations import *
 import pygame
 import network
 
 class Remove(): ## Using a class instead of a const incase I want to change how it behaves later. Keeping the pattern
-    def __init__(self, id):
+    def __init__(self, id, rollback_fn=lambda *args: None, args=()):
         self.id = id
+        self._rollback = rollback_fn
+        self._args = args
 
     def __eq__(self, __o) -> bool:
         if isinstance(__o, Remove):
@@ -13,7 +17,11 @@ class Remove(): ## Using a class instead of a const incase I want to change how 
         return False
 
     def rollback(self):
+        self._rollback(*self._args)
         Ball.find(self.id).hide = 0
+
+    def __repr__(self) -> str:
+        return str([self.id, self._rollback, self._args])
 
 class Bounce(): ## Any change in pos and or speed
     def __init__(self,x,y,vx,vy):
@@ -27,6 +35,9 @@ class Bounce(): ## Any change in pos and or speed
             return self.info() == __o.info()
         
         return False
+
+    def __repr__(self) -> str:
+        return str(self.info())
 
     def info(self) -> List:
         return [self.x,self.y,self.vx,self.vy]
@@ -43,6 +54,18 @@ class Ball(Sprite):
         self.hide = 0 ## For client-side pseudo-removal
         Ball.balls.append(self)
 
+    def draw(self, surface):
+        if self.hide:
+            return
+
+        a = self.current_animation().current_frame().image
+        if network.Network.connection_id == self.owner_id:
+            a.fill((10,200,30))
+        else:
+            a.fill((10,20,230))
+
+        super().draw(surface)
+
     def paint(self,color): ## Debugg temp function
         self.animations[0].frames[0].image.fill(color)
 
@@ -55,7 +78,13 @@ class Ball(Sprite):
         string = [float(x) for x in string.split(';')]
         return string # x,y,id
 
-    def despawn(self): ## Whenever the ball goes offscreen
+    def spawn(x,y,speed):
+        create_ball(x,y,speed)
+        msg = 'PKT_S_Ball'
+        args = f'{x};{y};{speed[0]};{speed[1]}'
+        Ball.send_to_network(msg+'/'+args)
+
+    def despawn(self, _rollback=lambda *args: None, _args=()): ## Whenever the ball goes offscreen
         ## Dont remove it, if you aren't the owner
         if self.owner_id == network.Network.connection_id:
             Ball.remove(self)
@@ -63,16 +92,18 @@ class Ball(Sprite):
             args = f'{self.id}'
             Ball.send_to_network(msg+'/'+args)
         else:
-            self.history.append(Remove(self.id))
             self.hide = 1
+            self.history.append(Remove(self.id,_rollback,_args))
 
     def remove(ball):
         Ball.balls.remove(ball)
-        super().remove(ball)
+        Entity.remove(ball)
 
     def remove_network(args): ## PKT_R_Ball/id
         id = NetworkBall.PKT_R_Ball(args)
         b = Ball.find(id)
+        if b == None:
+            return
 
         if b.check_prediction(Remove(b.id)):
             Ball.remove(b) ## if he is right, actually remove the obj form list
@@ -84,7 +115,10 @@ class Ball(Sprite):
         x,y,vx,vy,id,ow_id = args
 
         self = Ball.find(id)
-        self.owner_id = ow_id ## Update the owner_id regardless of prediction.
+        if self == None:
+            return
+
+        self.owner_id = int(ow_id) ## Update the owner_id regardless of prediction.
         ## Check if it needs reconciliation
         
         if self.check_prediction(Bounce(x,y,vx,vy)):
@@ -95,7 +129,11 @@ class Ball(Sprite):
         self.x = x
         self.y = y
         self.update_speed(Vector2(vx,vy),from_network=True)
-        print('Updating ball pos to',x,y) ## debug
+        # print('Updating ball pos to',x,y) ## debug
+
+    def spawn_network(args):
+        x,y,vx,vy = args.split(';')
+        create_ball(float(x),float(y),Vector2(float(vx),float(vy)))
 
     def send_to_network(message):
         network.Network.send(message)
@@ -103,15 +141,21 @@ class Ball(Sprite):
     ######################
 
     def update_speed(self,new_speed, from_network=False):
+        if self.hide:
+            return
         self.speed = new_speed
-        print('ball:',self.owner_id, 'connection:', network.Network.connection_id)
+        # print('ball:',self.owner_id, 'connection:', network.Network.connection_id)
         if not from_network and self.owner_id == network.Network.connection_id:
             self.decide_owner()
             msg = f'PKT_U_Ball/{self.encode()}'
             Ball.send_to_network(msg)
 
-    def collided(self, collided_with_box, father_obj): ## Find the normal vector from collided_with and pass to bounce()
-
+    def collided(self, collided_with_box, father_obj): ## Find the normal vector from collided_with and pass to bounce()   
+        if self.hide:
+            return 
+        from objects.goal import Goal
+        if isinstance(father_obj, Goal):
+            return
         #This is the annoyance of hbox using relative coords, it requires the father obj in the function to find its(hbox's) anchor
         xy = father_obj.coords() + collided_with_box.coords() ## Real pos of DectionBox
         
@@ -138,14 +182,26 @@ class Ball(Sprite):
                 self.bounce(v)
 
     def bounce(self,normal_vector):
-        self.store_bounce()
+        if self.hide:
+            return
         self.update_speed(self.speed.reflect(normal_vector))
+        self.store_bounce()
 
     def decide_owner(self): ## This will decide who should take care of this obj's updating
-        if self.speed[1] < 0:
+        a = Vector2(-self.x,-self.y)
+        b = Vector2(self.x,-self.y)
+        c = Vector2(600 - self.x,600 - self.y)
+        d = Vector2(-self.x,600 - self.y)
+        r = [(a,b),(c,d),(a,d),(b,c)]
+
+        self.owner_id = None
+        for x in range(4):
+            z = r[x]
+            if z[0] * self.speed >= 0 and z[1] * self.speed >= 0:
+                self.owner_id = x+1
+        if self.owner_id == None or self.owner_id > len(network.Network.other_servers_ips)+1:
             self.owner_id = 1
-        else:
-            self.owner_id = 2
+
 
     def check_prediction(self,recieved_action) -> bool: ## Check if our prediction-side is faithful to the truth
         i = 1 # Not an actual index
@@ -155,8 +211,8 @@ class Ball(Sprite):
                 return True
             i += 1
 
-        self.rollback()
-        self.bounces = [] ## Predction is completly wrong, ignore the future
+        self.rollback(self.history)
+        self.history = [] ## Predction is completly wrong, ignore the future
         return False
 
     def rollback(self,actions):
@@ -169,7 +225,7 @@ class Ball(Sprite):
                 return b
 
     def store_bounce(self):
-        self.bounces.append(Bounce(self.x,self.y,self.speed[0],self.speed[1]))
+        self.history.append(Bounce(self.x,self.y,self.speed[0],self.speed[1]))
 
 def create_ball(x,y,speed=Vector2(0,1)):
     r =  7
@@ -184,6 +240,7 @@ def create_ball(x,y,speed=Vector2(0,1)):
     ball = Ball(x,y,[a],{})
     ball.speed = speed
 
+    ball.decide_owner()
     return ball
 
 class NetworkBall():

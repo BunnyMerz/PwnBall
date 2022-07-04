@@ -41,7 +41,7 @@ class Player(Sprite):
         self = Player.find(id)
         self.x = x
         self.y = y
-        print('Player',id,'moved to',x,y)
+        # print('Player',id,'moved to',x,y)
 
     def update_to_network(self):
         network.Network.send(self.encode())

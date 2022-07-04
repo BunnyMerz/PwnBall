@@ -1,6 +1,6 @@
 from pygame import Vector2
 import itertools
-import pygame
+# import pygame
 
 class Entity():
     """Basic class. Used for basically anything that resides phisically in the game"""
@@ -47,10 +47,11 @@ class Animation():
     """Has a collection of frames, with how long they should play, which frame the animation is, etc..."""
     def __init__(
             self,
-            frames,frame_duration=[],
+            frames,frame_duration=30,
             name='',
             loop_to_frame=0,starting_frame=0,
-            done = lambda x : None, looped = lambda x : None
+            transition_tree={},
+            done = lambda : None, looped = lambda : None, transition = lambda : None
         ):
 
         self.name = name # for easier reading when setting up the sprite 
@@ -59,9 +60,10 @@ class Animation():
         self.starting_frame = starting_frame
         self.current_frame_i = starting_frame # int; frames[current_frame_i]
         self.loop_to_frame = loop_to_frame ## Which frame it should go to when reaching the end (useful for animations with a initial cast into a charge)
+        self.transition_tree = transition_tree
 
-        self.current_frame_count = 0 ## Delay of current frame; current_frame_count < frame_duration[current_frame]
-        self.frame_duration = frame_duration ## How long each frame should last
+        self.current_frame_count = 0 ## when current_frame_count > frame_duration, next_frame()
+        self.frame_duration = frame_duration # ms
 
         ## configs
         self.reset_on_change = 1 ## If, when the animation loses focous, resets to the start of it
@@ -70,15 +72,34 @@ class Animation():
         self.hide = 0 ## If it should be draw
 
         ## callbacks
+        self.transition_priority = 1 ## checks agains other transitions to see if it should overwrite
+        self.transition = transition ## will be called inside update() so it can transition to another animation at the right time
         self.done = done ## this will be called once the animation is done (but not when looping back)
         self.looped = looped ## this will be called once the animation is done and looping back to a spot
 
     # TODO call reset() somewhere when reset_on_change is true
     # TODO stop animation if it isn't set to loop (and call done())
+    
+
+    ### Called from outside
+    def got_focous(self): ## Gets called when the class above focous on it
+        if self.reset_on_change:
+            self.reset()
+
+    def interrupt(self): ## Whenever the animation ends by an external call
+        pass
+
+    def queue_transition(self,animation_name, force_change, sync):
+        pass
+
+    def play(self):
+        self.paused = 0
+    ###
 
     def reset(self): ## Resets to inital state
         self.current_frame_count = 0
         self.current_frame_i = self.starting_frame
+        self.transition = lambda : None
 
     def current_frame(self):
         return self.frames[self.current_frame_i]
@@ -87,7 +108,11 @@ class Animation():
         self.current_frame_i += 1
         if self.current_frame_i >= len(self.frames):
             self.looped()
-            self.current_frame_i = self.loop_to_frame
+            if self.loop:
+                self.current_frame_i = self.loop_to_frame
+            else:
+                self.paused = 1
+                self.current_frame_i -= 1 ## keep in last frame
 
     def collisionboxes(self): ## Of the current frame
         return self.current_frame().collisionboxes
@@ -99,14 +124,15 @@ class Animation():
             return
         self.current_frame().draw(surface,x,y)
 
-    def update(self,delta_frame): ## Will try to advance the animation. Will not add to the timer if paused.
+    def update(self,delta_time,multiplayer=1): ## Will try to advance the animation. Will not add to the timer if paused.
         if self.paused:
             return
 
-        self.current_frame_count += delta_frame
+        self.current_frame_count += delta_time*multiplayer
 
-        while self.current_frame_count > self.frame_duration[self.current_frame_i]: # if frame is done
-            self.current_frame_count -= self.frame_duration[self.current_frame_i] # skip to next section
+        ## transition_callback()
+        while self.current_frame_count > self.frame_duration: # if frame is done
+            self.current_frame_count -= self.frame_duration # skip to next section
             self.next_frame() #
 
     def config(self,loop,paused,hide,reset_on_change):
@@ -121,7 +147,7 @@ class Sprite(Entity):
         ## Animation
         self.animations = animations
         self.state = 0 ## Each state should represent an animation
-        self.animation_tree = animation_tree # {'idle':0,'jump':1} with 'animation_name':state for easier changing
+        self.animation_tree = animation_tree # {'idle':0,'jump':1} with {'animation_name':state} for easier changing
 
         ## Movement. It would be more appropriate to be outside of sprite, but repeating on every sub-class would be tiring
         self.speed = Vector2()
@@ -136,8 +162,21 @@ class Sprite(Entity):
     def current_animation(self):
         return self.animations[self.state]
 
-    def change_animation(self,animation_name):
-        self.state = self.animation_tree[animation_name]
+    def queue_animation_change(self,animation_name_or_index, force_change=0, sync=0, transition_priority=1):
+        """If 'animation_name_or_index' is a name, the name will be given to the current_animation()' and queued to be played based of the current_animation().transition_tree. If the name isn't found on the tree, it will immediatly be played.
+
+        - Force_change will disregard the animation tree and will imediatly interrupt it, calling .interrupt() onto current_animation() and self.state will be changed. Force_change will not ignore transition_priority.
+
+        - If sync is 1, it will wait until the current_animation()'s current frame ends so it can change to the given animation. This can synergize with force_change, as it will force the animation to change on the next possible frame, regardless of the transition_tree
+
+        - Transition_priority is an int of any value and will decided if the animation that is being queued right now will override the transition currently waiting. It will override incase the value is the same or bigger than the one waiting.
+        """
+        if isinstance(animation_name_or_index,int):
+            self.current_animation().interrupt()
+            self.state = animation_name_or_index
+        elif isinstance(animation_name_or_index,str):
+            self.state = self.animation_tree[animation_name_or_index]
+        self.current_animation().got_focous()
 
     def collisionboxes(self):
         return self.current_animation().collisionboxes()
@@ -167,9 +206,11 @@ class Sprite(Entity):
 
         return False
 
-    def update(self,dt=0): ## Applies any time-based actions
-        self.x += self.speed[0]
-        self.y += self.speed[1]
+    def update(self,dt,multiplayer=1): ## Applies any time-based actions
+        self.x += self.speed[0] * dt/1000
+        self.y += self.speed[1] * dt/1000
+
+        self.current_animation().update(dt,multiplayer)
         # TODO accel, animation, ...
 
 
@@ -227,6 +268,9 @@ class DetectionBox:
         return self.shape.right_most() + self.rx
     
     def define_simplebox(boxes): ## A box that generelizes others. Returns a DetectionBox made of shape.Box
+        if len(boxes) == 0:
+            return []
+
         x,y = boxes[-1].left_most(),boxes[-1].upper() ## need lowest possible number
         x2,y2 = boxes[-1].right_most(),boxes[-1].lower() ## need highest possible number
         for box in boxes[:-1]: # we already checked the last one on the last 2 lines
