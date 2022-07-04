@@ -50,9 +50,15 @@ def main():
         Wall(width-70,0,20,600)
 
     goals = [g1,g2,g3,g4][:len(Network.other_servers_ips)+1]
+    goals = []
     players = [p1, p2, p3, p4][:len(Network.other_servers_ips)+1]
 
     PlayerControls(players[Network.connection_id - 1], {'move_left': K_a,'move_right': K_d,'move_up': K_w,'move_down': K_s,'speed_up': K_LSHIFT})
+
+    Wall(0,0,600,10)
+    Wall(0,0,10,600)
+    Wall(0,height-10,600,10)
+    Wall(width-10,0,10,600)
 
 
     Wall(50,0,20,70)
@@ -66,13 +72,14 @@ def main():
     Wall(width-70,50,70,20)
     Wall(width-70,height-70,70,20)
 
-    b1 = create_ball(100,340, Vector2(200,-500))
-    b2 = create_ball(200,200, Vector2(-300,400))
-    b3 = create_ball(230,220, Vector2(-200,340))
+    # b1 = create_ball(100,340, Vector2(200,-500))
+    # b2 = create_ball(200,200, Vector2(-300,400))
+    # b3 = create_ball(230,220, Vector2(-200,340))
     b4 = create_ball(240,220, Vector2(-300,400))
 
     window = pygame.display.set_mode((width,height))#, pygame.NOFRAME)
     clock = pygame.time.Clock()
+    pygame.display.set_caption(f"{Network.connection_id}")
     
     update_time = 10 # ms
     t = 0
@@ -98,9 +105,12 @@ def main():
                 for p in players + Wall.walls + goals:
                     b.has_collided(p)
 
-                if b.x > width or b.x < 0 or b.y > height or b.y < 0:
-                    print(Network.connection_id, b.owner_id)
-                    
+                # pygame.draw.line(window, (100,100,100), (b.x,b.y), (0+70,0+70))
+                # pygame.draw.line(window, (100,100,100), (b.x,b.y), (600-70,0+70))
+                # pygame.draw.line(window, (100,100,100), (b.x,b.y), (600-70,600-70))
+                # pygame.draw.line(window, (100,100,100), (b.x,b.y), (0+70,600-70))
+
+                # pygame.draw.line(window, (200,100,100), (b.x,b.y), (b.speed[0]+b.x,b.speed[1]+b.y))
 
         pygame.display.update()
 

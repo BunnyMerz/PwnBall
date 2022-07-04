@@ -2,6 +2,9 @@ import socket
 import threading
 import time
 
+def simulate_lag(ms,fn,args):
+    time.sleep(ms/1000)
+    fn(args)
 
 class Server:
     def __init__(self, ip, port):
@@ -27,7 +30,9 @@ class Server:
             if data:
                 data = data.split('\0')[:-1]
                 for d in data:
-                    Network.on_message(d)
+                    t = threading.Thread(daemon=True, target=simulate_lag, args=(300, Network.on_message, d))
+                    t.start()
+                    # Network.on_message(d)
 
     def thread_connection(self):
         print("\n### Server.thread_connection()")
@@ -186,6 +191,7 @@ class Network:
             print('Invalid Packet recived')
             return
 
+        # print(f">>> Pkt - {class_type}.{mode} with args {args} {' '*30}",end='\r')
         ## Using dictionary and variable fn to avoid code injection
         fn = lambda : None
         _locals = locals()

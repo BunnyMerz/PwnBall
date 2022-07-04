@@ -58,11 +58,11 @@ class Ball(Sprite):
         if self.hide:
             return
 
-        a = self.current_animation().current_frame().image
-        if network.Network.connection_id == self.owner_id:
-            a.fill((10,200,30))
-        else:
-            a.fill((10,20,230))
+        # a = self.current_animation().current_frame().image
+        # if network.Network.connection_id == self.owner_id:
+        #     a.fill((10,200,30))
+        # else:
+        #     a.fill((10,20,230))
 
         super().draw(surface)
 
@@ -188,19 +188,30 @@ class Ball(Sprite):
         self.store_bounce()
 
     def decide_owner(self): ## This will decide who should take care of this obj's updating
-        a = Vector2(-self.x,-self.y)
-        b = Vector2(self.x,-self.y)
-        c = Vector2(600 - self.x,600 - self.y)
-        d = Vector2(-self.x,600 - self.y)
-        r = [(a,b),(c,d),(a,d),(b,c)]
-
+        a = Vector2(-self.x+70,-self.y+70)
+        b = Vector2(600-self.x-70,-self.y+70)
+        c = Vector2(600 - self.x - 70,600 - self.y - 70)
+        d = Vector2(-self.x + 70,600 - self.y - 70)
+        r = {3:1,12:2,9:3,6:4}
+        smallest = []
+        names = [1,2,4,8]
         self.owner_id = None
         for x in range(4):
-            z = r[x]
-            if z[0] * self.speed >= 0 and z[1] * self.speed >= 0:
-                self.owner_id = x+1
-        if self.owner_id == None or self.owner_id > len(network.Network.other_servers_ips)+1:
+            p = [a,b,c,d][x]
+            smallest.append(abs(p.angle_to(self.speed)))
+
+        print(smallest)
+        x = sum([x for _, x in sorted(zip(smallest, names))[:2]])
+
+        self.owner_id = r[x]
+
+        if self.owner_id == None:
+            # print("Ball decided as None",self.id)
             self.owner_id = 1
+        if self.owner_id > len(network.Network.other_servers_ips)+1:
+            # print("Ball out of player range",self.id,self.owner_id)
+            self.owner_id = 1
+
 
 
     def check_prediction(self,recieved_action) -> bool: ## Check if our prediction-side is faithful to the truth
@@ -216,8 +227,11 @@ class Ball(Sprite):
         return False
 
     def rollback(self,actions):
+        # a = ["$$ Prediction wrong! rollbacking the following:"]
         for act in actions:
+            # a.append("$ - " + str(act))
             act.rollback()
+        # print('\n'.join(a))
 
     def find(id): ## Overwrites entities' find, for efficiency
         for b in Ball.balls:

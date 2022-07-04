@@ -29,10 +29,10 @@ class Goal(Sprite):
                 Ball.send_to_network(msg+'/'+args)
 
                 direction = [
-                    Vector2(rng(0,1000) - 500,-(400 + rng(0,200))),
-                    Vector2(rng(0,1000) - 500,(400 + rng(0,200))),
-                    Vector2((400 + rng(0,200)), rng(0,1000) - 500),
-                    Vector2(-(400 + rng(0,200)), rng(0,1000) - 500),
+                    Vector2(rng(0,1000) - 500,600 - rng(0,200)),
+                    Vector2(rng(0,1000) - 500,- 600 + rng(0,200)),
+                    Vector2(600 - rng(0,200), rng(0,1000) - 500),
+                    Vector2(-600 + rng(0,200), rng(0,1000) - 500),
                 ][self.player_id-1]
                 Ball.spawn([300,300,90,600-90][self.player_id-1],[90,600-90,300,300][self.player_id-1], direction)
 
